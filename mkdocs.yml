@@ -285,6 +285,7 @@ nav:
               - "Reverse":
                   - "Game Setup": "games/sega/wacca/reverse/setup.md"
                   - "Controllers": "games/sega/wacca/reverse/controllers.md"
+                  - "Troubleshooting": "games/sega/wacca/reverse/troubleshooting.md"
       - NAMCO:
           - "Taiko no Tatsujin: Nijiiro":
               - "Game Setup": "games/namco/taikonijiiro/setup.md"
