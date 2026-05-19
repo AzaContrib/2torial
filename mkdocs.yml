@@ -144,6 +144,7 @@ nav:
               - "Troubleshooting": "games/konami/mfg/troubleshooting.md"
       - SEGA:
           - "CHUNITHM":
+              - "Linux Setup": "games/sega/chunithm/linux.md"
               - "CHUNITHM":
                   - "Game Setup": "games/sega/chunithm/chunithm/setup.md"
                   - "Controllers": "games/sega/chunithm/chunithm/controllers.md"

@@ -1,0 +1,345 @@
+# Linux Setup
+
+!!! info "Synopsis"
+
+    CHUNITHM is built for Windows, but newer `chusan`-based versions can be run on Linux with Wine and DXVK.
+
+    This guide covers a VHDX-style data package, such as `Chusan245.vhdx`, and explains how to extract it, create a Wine prefix, map the required game drives, and launch `amdaemon` and `chusanApp` correctly.
+
+!!! warning "Compatibility"
+
+    **ONLY** the following game and versions are confirmed to work with the process described in this guide.
+
+    | Game | Version(s) | Caveats (if any) |
+    |------|:----------:|:----------------:|
+    | CHUNITHM | `chusan`/NEW and newer | Tested with `Chusan245.vhdx` on Arch/EndeavourOS and NVIDIA. |
+
+    This guide was primarily written targetting arch-based systems running Wine with DXVK.  
+    **Instructions should still be distro and DE agnostic, but your mileage may vary.**
+
+## Pre-requisites
+
+!!! tip ""
+
+    - A Linux system with:
+        - `wine` with wow64 included
+        - `winetricks` installed
+        - `qemu-img`, `qemu-nbd`, and `ntfs-3g` installed, if your data is inside a VHDX
+        - Vulkan drivers installed for both 64-bit and 32-bit applications
+    - Compatible game data
+    - Unprotected `chusanApp.exe` and `amdaemon.exe` for your game version
+    - Segatools installed in the game's `📂bin` directory
+    - Your game's regular setup guide opened in another tab
+
+=== "Arch / EndeavourOS"
+
+    !!! tip ""
+
+        Install the common packages with:
+
+        ```sh
+        sudo pacman -Sy --needed qemu-img qemu-base ntfs-3g wine wine-mono wine-gecko winetricks vulkan-tools vulkan-icd-loader lib32-vulkan-icd-loader
+        ```
+
+        Install the 32-bit Vulkan driver matching your graphics card:
+
+        ```sh
+        sudo pacman -S --needed lib32-nvidia-utils
+        ```
+
+        Replace `lib32-nvidia-utils` with `lib32-vulkan-radeon` for AMD or `lib32-vulkan-intel` for Intel.
+
+=== "Other distros"
+
+    !!! tip ""
+
+        Package names vary by distro, but you need these components:
+
+        - Wine with wow64 support
+        - Winetricks
+        - DXVK, installed through Winetricks or your package manager
+        - QEMU image tools, if using a VHDX
+        - NTFS userspace mount support, if using a VHDX
+        - 32-bit Vulkan support for your GPU
+
+## Preparing data from VHDX
+
+!!! danger "Do not run directly from the read-only VHDX mount"
+
+    The game writes to `📂appdata`, `📂DEVICE`, and other files while running.  
+    Mount the VHDX read-only, then copy the files to a normal writable directory.
+
+!!! danger "Double check commands"
+
+    We provide ready-made commands for simplicity, however **don't blindly copy and execute them**.  
+    **ALWAYS** double check commands before running them, and substitute `REPLACE_THIS_PATH` with your own location.
+
+### Mounting the VHDX read-only
+
+!!! tip ""
+
+    Connect the VHDX through NBD:
+
+    ```sh
+    sudo modprobe nbd max_part=8
+    sudo qemu-nbd --read-only --connect=/dev/nbd0 REPLACE_THIS_PATH/Chusan245.vhdx
+    lsblk -f /dev/nbd0
+    ```
+
+    Mount the NTFS data partition:
+
+    ```sh
+    sudo mkdir -p /mnt/chusan245
+    sudo mount -t ntfs-3g -o ro,uid=$(id -u),gid=$(id -g),windows_names /dev/nbd0p2 /mnt/chusan245
+    ```
+
+### Copying the game data
+
+!!! tip ""
+
+    Create a writable `📂contents` directory and copy the mounted files into it:
+
+    ```sh
+    mkdir -p REPLACE_THIS_PATH/contents
+    rsync -a /mnt/chusan245/ REPLACE_THIS_PATH/contents/
+    ```
+
+    Your copied data should look similar to:
+
+    ```
+    📂contents
+    ├── 📂bin
+    ├── 📂data
+    ├── 📂firm
+    ├── 📂license
+    ├── ▶️pxGetHwinfo.exe
+    ├── 📝pxGetHwInfo.ini
+    └── 📄system_config.json
+    ```
+
+    After copying, unmount and disconnect the VHDX:
+
+    ```sh
+    sudo umount /mnt/chusan245
+    sudo qemu-nbd --disconnect /dev/nbd0
+    ```
+
+## Wine prefix
+
+### Initializing
+
+!!! tip ""
+
+    Create a new `📂prefix` directory next to your `📂contents` directory:
+
+    ```sh
+    WINEARCH=win64 WINEPREFIX=REPLACE_THIS_PATH/prefix wineboot --init
+    ```
+
+### Common dependencies
+
+!!! tip ""
+
+    Install DXVK to the prefix:
+
+    ```sh
+    WINEARCH=win64 WINEPREFIX=REPLACE_THIS_PATH/prefix winetricks -q dxvk
+    ```
+
+    DXVK is important for CHUNITHM on Wine. Without it, `chusanApp.exe` may exit immediately after the Segatools injector starts it.
+
+### Mapping the `Y:` drive
+
+!!! warning "Required for `amdaemon`"
+
+    `amdaemon.exe` expects writable storage at `Y:\SDHD\`.  
+    If `Y:` is not mapped, `amdaemon.exe.log` may contain:
+
+    ```txt
+    Error: create root folder. path Y:\SDHD\
+    ```
+
+!!! tip ""
+
+    Map Wine's `Y:` drive to `📂contents/bin/appdata`:
+
+    ```sh
+    mkdir -p REPLACE_THIS_PATH/prefix/dosdevices
+    ln -sfn REPLACE_THIS_PATH/contents/bin/appdata REPLACE_THIS_PATH/prefix/dosdevices/y:
+    ```
+
+    The final path `Y:\SDHD\` should resolve to:
+
+    ```
+    📂contents/bin/appdata/SDHD
+    ```
+
+## Launcher scripts
+
+!!! info "This section will help you create two bash scripts you may use to start and stop the game"
+
+    The original `launch.bat` starts `amdaemon`, starts `chusanApp`, then kills `amdaemon` when the injector returns.  
+    Under Wine, `chusanApp.exe` can stay running after the injector returns, so it is more reliable to start `amdaemon` separately and keep it alive.
+
+### Game start
+
+!!! tip ""
+
+    Create a file named `start.sh` next to your `📂contents` and `📂prefix` directories:
+
+    ```sh
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CONTENTS="$BASE_DIR/contents"
+    WINEPREFIX="$BASE_DIR/prefix"
+
+    export WINEPREFIX
+    export DXVK_LOG_LEVEL=info
+    export WINEDEBUG=-all
+
+    mkdir -p "$WINEPREFIX/dosdevices"
+    ln -sfn "$CONTENTS/bin/appdata" "$WINEPREFIX/dosdevices/y:"
+
+    cd "$CONTENTS/bin"
+
+    wine inject_x64.exe -k chusanhook_x64.dll amdaemon.exe \
+      -c config_common.json config_server.json config_client.json \
+      config_cvt.json config_sp.json config_hook.json \
+      > "$BASE_DIR/amdaemon.log" 2>&1 &
+
+    for _ in {1..40}; do
+      pgrep -x amdaemon.exe >/dev/null && break
+      sleep 0.25
+    done
+
+    if ! pgrep -x amdaemon.exe >/dev/null; then
+      echo "amdaemon did not stay running. Check amdaemon.log."
+      exit 1
+    fi
+
+    wine inject_x86.exe -k chusanhook_x86.dll chusanApp.exe \
+      > "$BASE_DIR/chusanapp.log" 2>&1 &
+
+    for _ in {1..80}; do
+      pgrep -x chusanApp.exe >/dev/null && break
+      sleep 0.25
+    done
+
+    if ! pgrep -x chusanApp.exe >/dev/null; then
+      echo "chusanApp did not stay running. Check chusanapp.log."
+      exit 1
+    fi
+
+    while pgrep -x chusanApp.exe >/dev/null; do
+      sleep 2
+    done
+
+    pkill -x amdaemon.exe >/dev/null 2>&1 || true
+    ```
+
+    Make it executable:
+
+    ```sh
+    chmod +x REPLACE_THIS_PATH/start.sh
+    ```
+
+    Launch the game:
+
+    ```sh
+    REPLACE_THIS_PATH/start.sh
+    ```
+
+### Game stop
+
+!!! tip ""
+
+    Create a file named `stop.sh` next to `start.sh`:
+
+    ```sh
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    export WINEPREFIX="$BASE_DIR/prefix"
+
+    pkill -x chusanApp.exe >/dev/null 2>&1 || true
+    pkill -x amdaemon.exe >/dev/null 2>&1 || true
+    wineserver -k >/dev/null 2>&1 || true
+    ```
+
+    Make it executable:
+
+    ```sh
+    chmod +x REPLACE_THIS_PATH/stop.sh
+    ```
+
+## First launch
+
+!!! tip ""
+
+    Once the game starts, continue with your version's regular CHUNITHM setup guide from the **First launch** section.
+
+    You will still need to configure the service menu, network, and cab settings as described in the Windows guide.
+
+## Troubleshooting
+
+### `amdaemon` exits immediately
+
+!!! tip ""
+
+    Check `amdaemon.log` first.
+
+    If it mentions `Y:\SDHD\`, your Wine `Y:` drive is missing or points to the wrong folder.
+
+    Recreate it with:
+
+    ```sh
+    ln -sfn REPLACE_THIS_PATH/contents/bin/appdata REPLACE_THIS_PATH/prefix/dosdevices/y:
+    ```
+
+### `chusanApp.exe` exits immediately
+
+!!! tip ""
+
+    Make sure DXVK is installed to the same Wine prefix used by `start.sh`:
+
+    ```sh
+    WINEARCH=win64 WINEPREFIX=REPLACE_THIS_PATH/prefix winetricks -q dxvk
+    ```
+
+    Also check that `segatools.ini` uses valid relative paths under `[vfs]`:
+
+    ```ini
+    [vfs]
+    amfs=amfs
+    option=option
+    appdata=appdata
+    ```
+
+### The game runs too fast or too slow
+
+!!! tip ""
+
+    CHUNITHM expects the monitor refresh rate configured in `segatools.ini`.
+
+    For a 60 Hz monitor:
+
+    ```ini
+    [system]
+    dipsw2=1
+    dipsw3=1
+    ```
+
+    For a 120 Hz monitor:
+
+    ```ini
+    [system]
+    dipsw2=0
+    dipsw3=0
+    ```
+
+## Help
+
+--8<-- "docs/snippets/common/help.md"
