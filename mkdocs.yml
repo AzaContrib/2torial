@@ -144,7 +144,6 @@ nav:
               - "Troubleshooting": "games/konami/mfg/troubleshooting.md"
       - SEGA:
           - "CHUNITHM":
-              - "Linux Setup": "games/sega/chunithm/linux.md"
               - "CHUNITHM":
                   - "Game Setup": "games/sega/chunithm/chunithm/setup.md"
                   - "Controllers": "games/sega/chunithm/chunithm/controllers.md"
@@ -247,6 +246,7 @@ nav:
                   - "Cab-to-Cab": "games/sega/chunithm/x-verse/c2c.md"
               - "X-VERSE-X":
                   - "Game Setup": "games/sega/chunithm/x-verse-x/setup.md"
+                  - "Linux Setup": "games/sega/chunithm/x-verse-x/linux.md"
                   - "Controllers": "games/sega/chunithm/x-verse-x/controllers.md"
                   - "Troubleshooting": "games/sega/chunithm/x-verse-x/troubleshooting.md"
                   - "Cab-to-Cab": "games/sega/chunithm/x-verse-x/c2c.md"
