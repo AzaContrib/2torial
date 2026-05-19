@@ -251,6 +251,32 @@
     REPLACE_THIS_PATH/start.sh
     ```
 
+??? tip "Optional performance monitoring"
+
+    If you want a live FPS/frame-time overlay while testing performance, install MangoHud and add the following near the top of `start.sh`, before launching Wine:
+
+    ```sh
+    if [[ "${CHUSAN_SHOW_FPS:-1}" == "1" ]]; then
+      mkdir -p "$BASE_DIR/mangohud-logs"
+      export MANGOHUD=1
+      export MANGOHUD_CONFIG="fps,frametime,gpu_stats,cpu_stats,position=top-left,output_folder=$BASE_DIR/mangohud-logs"
+    fi
+    ```
+
+    On Arch-based distros, the packages are usually:
+
+    ```sh
+    sudo pacman -S --needed mangohud lib32-mangohud
+    ```
+
+    If your system uses NVIDIA PRIME render offload, try launching the script through `prime-run`:
+
+    ```sh
+    prime-run REPLACE_THIS_PATH/start.sh
+    ```
+
+    `prime-run` is only needed on PRIME/hybrid graphics setups. On single-GPU desktops, or setups where you already export NVIDIA/Vulkan offload variables manually, launch the script normally.
+
 ### Game stop
 
 !!! tip ""
